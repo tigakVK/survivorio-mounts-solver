@@ -1,0 +1,5 @@
+.claude/
+test/orig.html
+test/orig-solver.js
+test/compare.js
+node_modules/
