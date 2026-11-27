@@ -179,9 +179,7 @@ button:disabled { cursor: not-allowed; }
 .inv-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .inv-head h2 { margin: 0; font-size: 17px; font-weight: 650; }
 .inv-total { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
-.mode { border: 0; padding: 0; margin: 10px 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.mode legend { float: left; font-size: 13px; color: var(--muted); margin-right: 4px; padding: 0; }
-.inv-body { container: inv / inline-size; }
+.inv-body { container: inv / inline-size; margin-top: 18px; padding-right: 10px; }
 .inv-grid {
   --cols: 7;
   display: grid; gap: 6px;
@@ -190,33 +188,42 @@ button:disabled { cursor: not-allowed; }
 }
 .tier-h { display: flex; align-items: center; justify-content: center; grid-column: 1; grid-row: calc(var(--t) + 1); }
 .tier-h .name { display: none; }
-.tile { grid-row: calc(var(--t) + 1); grid-column: calc(var(--s) + 2); }
+.cell { grid-row: calc(var(--t) + 1); grid-column: calc(var(--s) + 2); }
 @container inv (min-width: 480px) {
   .inv-grid { grid-template-columns: repeat(7, minmax(0, 84px)); justify-content: start; }
   .tier-h { grid-row: 1; grid-column: calc(var(--t) + 1); gap: 6px; justify-content: flex-start; font-size: 12px; color: var(--muted); min-width: 0; }
   .tier-h .name { display: inline; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tile { grid-row: calc(var(--s) + 2); grid-column: calc(var(--t) + 1); }
+  .cell { grid-row: calc(var(--s) + 2); grid-column: calc(var(--t) + 1); }
 }
+.cell { position: relative; min-width: 0; }
 .tile {
-  position: relative; aspect-ratio: 1; min-width: 0; min-height: 44px; padding: 3px;
+  position: relative; width: 100%; aspect-ratio: 1; min-width: 0; min-height: 44px; padding: 3px;
   background: var(--board); border: 2px solid var(--edge); border-radius: 10px;
   display: grid; place-items: center;
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none;
   transition: border-color 100ms, background 100ms, transform 80ms;
 }
 .tile canvas { width: 100%; height: 100%; display: block; pointer-events: none; }
-.tile[data-n="0"] canvas { opacity: .4; }
-.tile[data-n="0"] { border-color: #3c4579; }
+.cell[data-n="0"] .tile canvas { opacity: .4; }
+.cell[data-n="0"] .tile { border-color: #3c4579; }
 .tile:hover { border-color: var(--accent-hover); background: #131728; }
-.inv-card.remove-mode .tile:hover { border-color: var(--warn); background: rgba(255, 138, 122, .08); }
 .tile:active { transform: scale(.95); }
-.tile .n {
-  position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px; padding: 0 6px;
-  border-radius: 11px; background: var(--accent); color: var(--accent-ink);
-  font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums;
-  border: 2px solid var(--panel);
+/* Count pill on the tile's corner: the minus sits right beside the number. */
+.badge {
+  position: absolute; top: -10px; right: -10px; z-index: 1; display: flex; height: 28px;
+  border: 2px solid var(--panel); border-radius: 14px; overflow: hidden;
+  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
 }
-.tile[data-n="0"] .n { display: none; }
+.cell[data-n="0"] .badge { display: none; }
+.badge .n { min-width: 24px; padding: 0 6px; background: var(--accent); color: var(--accent-ink); line-height: 24px; text-align: center; }
+.minus {
+  width: 26px; height: 24px; padding: 0; border: 0; border-right: 1px solid var(--panel);
+  background: var(--panel-2); color: var(--text); font: inherit; font-size: 15px; line-height: 24px;
+}
+.minus:hover { background: var(--warn); color: var(--accent-ink); }
+.minus:active { background: #ffb3a8; color: var(--accent-ink); }
+.minus:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+@media (pointer: coarse) { .minus { width: 28px; } }
 .inv-tip { font-size: 12.5px; color: var(--muted); margin: 12px 0 0; }
 .inv-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .inv-actions .danger { margin-left: auto; }
@@ -308,11 +315,6 @@ footer .disclaimer { display: block; margin-top: 2px; }
       <h2 id="inv-h" data-i18n="inv.title">Your pieces</h2>
       <span class="inv-total" id="inv-total"></span>
     </div>
-    <fieldset class="mode">
-      <legend data-i18n="mode.legend">Clicking a piece</legend>
-      <label class="seg"><input type="radio" name="mode" value="add" checked><span data-i18n="mode.add">adds one</span></label>
-      <label class="seg"><input type="radio" name="mode" value="remove"><span data-i18n="mode.remove">removes one</span></label>
-    </fieldset>
     <div class="inv-body">
       <div class="inv-grid" id="inv-grid"></div>
     </div>
@@ -417,9 +419,9 @@ const I18N = {
     'hint.many': 'One more row needs at least {m} more pieces.',
     'or': 'or',
     'inv.title': 'Your pieces',
-    'mode.legend': 'Clicking a piece', 'mode.add': 'adds one', 'mode.remove': 'removes one',
-    'inv.tip': 'Right-click (or long-press on Android) removes one. Keyboard: arrow keys move, + and − change the count, digits type it.',
+    'inv.tip': 'Tap a piece to add one and − to remove one. Right-click also removes one. Keyboard: arrow keys move, + and − change the count, digits type it.',
     'tile.aria': '{shape} ({tier}), {n} owned',
+    'minus.aria': 'Remove one {shape} ({tier})',
     'btn.undo': 'Undo', 'btn.share': 'Copy link', 'btn.image': 'Save image', 'btn.clear': 'Clear all',
     'toast.cleared': 'Cleared {n} pieces.',
     'toast.copied': 'Link copied. It includes your mount and pieces.',
@@ -463,8 +465,7 @@ const zeroCounts = () => SHAPES.map(() => TIERS.map(() => 0));
 const state = {
   counts: zeroCounts(),
   mount: 'scooter', customW: 7, customH: 8,
-  priority: load(KEY_PRIO) === 'value' ? 'value' : 'rows',
-  mode: 'add'
+  priority: load(KEY_PRIO) === 'value' ? 'value' : 'rows'
 };
 const undoStack = [];
 const dims = () => {
@@ -659,16 +660,25 @@ function buildGrid() {
   });
   SHAPES.forEach((shape, si) => {
     TIERS.forEach((tier, ti) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.style.setProperty('--s', si); cell.style.setProperty('--t', ti);
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'tile';
-      b.style.setProperty('--s', si); b.style.setProperty('--t', ti);
       b.dataset.s = si; b.dataset.t = ti;
       b.tabIndex = si === 0 && ti === 0 ? 0 : -1;
       const cv = document.createElement('canvas');
       cv.setAttribute('aria-hidden', 'true');
+      b.appendChild(cv);
+      const badge = document.createElement('span'); badge.className = 'badge';
+      const minus = document.createElement('button');
+      minus.type = 'button'; minus.className = 'minus'; minus.textContent = '−';
+      minus.dataset.s = si; minus.dataset.t = ti;
+      minus.tabIndex = -1; // keyboard users press − on the tile itself
       const n = document.createElement('span'); n.className = 'n'; n.setAttribute('aria-hidden', 'true');
-      b.append(cv, n);
-      invGrid.appendChild(b);
+      badge.append(minus, n);
+      cell.append(b, badge);
+      invGrid.appendChild(cell);
       tiles[si][ti] = b;
     });
   });
@@ -679,10 +689,11 @@ function refreshTiles() {
   updateTotals();
 }
 function updateTile(si, ti) {
-  const b = tiles[si][ti], n = state.counts[si][ti];
-  b.dataset.n = n;
-  b.querySelector('.n').textContent = n;
+  const b = tiles[si][ti], n = state.counts[si][ti], cell = b.parentNode;
+  cell.dataset.n = n;
+  cell.querySelector('.n').textContent = n;
   b.setAttribute('aria-label', t('tile.aria', { shape: shapeName(si), tier: tierName(ti), n }));
+  cell.querySelector('.minus').setAttribute('aria-label', t('minus.aria', { shape: shapeName(si), tier: tierName(ti) }));
 }
 function updateTotals() {
   const n = totalPieces();
@@ -764,15 +775,23 @@ function focusTile(si, ti) {
   tiles[si][ti].focus();
 }
 function onGridClick(e) {
+  const m = e.target.closest('.minus');
+  if (m) {
+    const si = +m.dataset.s, ti = +m.dataset.t;
+    change(si, ti, -1);
+    // The pill hides at zero; keep focus on the piece instead of losing it.
+    if (state.counts[si][ti] === 0 && document.activeElement === m) focusTile(si, ti);
+    return;
+  }
   const b = e.target.closest('.tile');
   if (!b) return;
   const si = +b.dataset.s, ti = +b.dataset.t;
   tiles.forEach((row) => row.forEach((x) => { x.tabIndex = -1; }));
   b.tabIndex = 0;
-  change(si, ti, state.mode === 'remove' || e.shiftKey ? -1 : 1);
+  change(si, ti, e.shiftKey ? -1 : 1);
 }
 function onGridContext(e) {
-  const b = e.target.closest('.tile');
+  const b = e.target.closest('.cell')?.querySelector('.tile');
   if (!b) return;
   e.preventDefault();
   change(+b.dataset.s, +b.dataset.t, -1);
@@ -1157,7 +1176,6 @@ function init() {
   document.querySelector('input[name="prio"][value="' + state.priority + '"]').checked = true;
 
   document.querySelectorAll('input[name="prio"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { state.priority = r.value; persist(); scheduleSolve(0); } }));
-  document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { state.mode = r.value; invCard.classList.toggle('remove-mode', r.value === 'remove'); } }));
   $('cw').addEventListener('input', onCustomInput); $('ch').addEventListener('input', onCustomInput);
   $('cw').addEventListener('change', onCustomCommit); $('ch').addEventListener('change', onCustomCommit);
   invGrid.addEventListener('click', onGridClick);
