@@ -155,20 +155,27 @@ function runPattern(S, ctx) {
   // Square, bar, L and J always cover 2 dark + 2 light; a T covers 3 + 1. So when the
   // remaining pieces must exactly cover the remaining S cells, T pieces must make up
   // the imbalance: each T adds +-2.
-  var dr = 0;
-  for (var si = 0; si < scan.length; si++) dr += ((scan[si] % W + ((scan[si] / W) | 0)) & 1) ? 1 : -1;
+  // Stripe balances of the same cells (row parity and column parity). Under either
+  // stripe colouring, squares and bars cover a multiple of 4 more of one colour,
+  // L and J always 2 more, and a T 2 more in exactly one of the two colourings.
+  var dr = 0, dRw = 0, dCl = 0;
+  for (var si = 0; si < scan.length; si++) {
+    var sx = scan[si] % W, sy = (scan[si] / W) | 0;
+    dr += ((sx + sy) & 1) ? 1 : -1; dRw += (sy & 1) ? 1 : -1; dCl += (sx & 1) ? 1 : -1;
+  }
   var noOutside = k === H;
   var lastFree = -1;
   for (var ly = 0; ly < H; ly++) if (!S[ly]) lastFree = ly;
-  var histT = new Int32Array(8), histN = new Int32Array(8);
-  var T_SHAPE = 4;
+  var histT = new Int32Array(8), histN = new Int32Array(8), histLJ = new Int32Array(8), histO = new Int32Array(8);
+  var T_SHAPE = 4, L_SHAPE = 2, J_SHAPE = 3;
 
   function fillHists() {
-    for (var v = 0; v < 8; v++) { histT[v] = 0; histN[v] = 0; }
+    for (var v = 0; v < 8; v++) { histT[v] = 0; histN[v] = 0; histLJ[v] = 0; histO[v] = 0; }
     for (var s = 0; s < NS; s++) {
-      var h = s === T_SHAPE ? histT : histN, end = act[s] + n[s] - used[s];
+      var h = s === T_SHAPE ? histT : (s === L_SHAPE || s === J_SHAPE) ? histLJ : histO, end = act[s] + n[s] - used[s];
       for (var p = act[s]; p < end; p++) h[vals[s][p]]++;
     }
+    for (var v2 = 0; v2 < 8; v2++) histN[v2] = histLJ[v2] + histO[v2];
   }
   function topOf(h, m) {
     var sum = 0;
@@ -186,16 +193,33 @@ function runPattern(S, ctx) {
     for (var v2 = 7; v2 >= 1 && cnt > 0; v2--) { var take = histN[v2] < cnt ? histN[v2] : cnt; sum += take * v2; cnt -= take; }
     return sum;
   }
-  // Exact cover of the remaining R cells by q = R/4 pieces: best value over T counts
-  // allowed by the checkerboard balance, or -1 when no count works.
+  // Exact cover of the remaining R cells by q = R/4 pieces: best value over the piece
+  // mixes the colourings allow, or -1 when none works.
+  //  - checkerboard: each T adds +-2 and nothing else unbalances it, so the T count t
+  //    has t >= |dr|/2 and the parity of dr/2;
+  //  - stripes (mod 4): 2(LJ + T_horizontal) = dRw and 2(LJ + T_vertical) = dCl, so t
+  //    has the parity of (dRw + dCl)/2, and with no T the L+J count has that of dRw/2.
   function exactBound(R) {
-    if (R & 3 || dr & 1) return -1;
+    if (R & 3 || dr & 1 || dRw & 1 || dCl & 1) return -1;
+    var tPar = (dr >> 1) & 1;
+    if (tPar !== (((dRw + dCl) >> 1) & 1)) return -1;
     fillHists();
     var q = R >> 2, nT = countOf(histT), nN = countOf(histN);
     var lo = Math.max(0, q - nN, Math.abs(dr) >> 1), hi = Math.min(nT, q), best = -1;
     for (var t = lo; t <= hi; t++) {
-      if (((t - (dr >> 1)) & 1) !== 0) continue;
-      var a = topOf(histT, t), b = topOf(histN, q - t);
+      if ((t & 1) !== tPar) continue;
+      var a = topOf(histT, t), b;
+      if (t > 0) b = topOf(histN, q - t);
+      else {
+        // No T: the L+J count is fixed mod 2.
+        b = -1;
+        var nLJ = countOf(histLJ), nO = countOf(histO);
+        for (var lj = (dRw >> 1) & 1; lj <= nLJ && lj <= q; lj += 2) {
+          if (q - lj > nO) continue;
+          var v = topOf(histLJ, lj) + topOf(histO, q - lj);
+          if (v > b) b = v;
+        }
+      }
       if (a >= 0 && b >= 0 && a + b > best) best = a + b;
     }
     return best;
@@ -275,7 +299,15 @@ function runPattern(S, ctx) {
     var eb = exact ? exactBound(R) : 0;
     if (eb < 0) return;
     if (mode === 'value' && best.found) {
-      var ub = value + (exact ? eb : topMarginal(R >> 2));
+      // Every piece placed from here covers at least one empty S cell. So either the
+      // remaining actives tile the rest of S exactly (the checkerboard rule applies to
+      // them), or some filler takes an S cell and at most floor((R-1)/4) actives fit.
+      var ub;
+      if (exact) ub = value + eb;
+      else {
+        var e2 = exactBound(R), m2 = topMarginal((R - 1) >> 2);
+        ub = value + (e2 > m2 ? e2 : m2);
+      }
       // Equal value only matters for more rows; fewer filler pieces is cosmetic and
       // not worth proving.
       if (ub < best.value || (ub === best.value && k <= best.k)) return;
@@ -314,11 +346,11 @@ function runPattern(S, ctx) {
           }
           if (!ok || active !== (pass === 0)) continue;
 
-          var cells = cellsTmp.slice(), dd = 0;
+          var cells = cellsTmp.slice(), dd = 0, ddR = 0, ddC = 0;
           for (var q = 0; q < 4; q++) {
             var cq = cells[q], qy = (cq / W) | 0, qx = cq % W;
             occ[cq] = 1; rh1[qy] ^= ZC1[cq]; rh2[qy] ^= ZC2[cq];
-            if (S[qy]) dd += ((qx + qy) & 1) ? 1 : -1;
+            if (S[qy]) { dd += ((qx + qy) & 1) ? 1 : -1; ddR += (qy & 1) ? 1 : -1; ddC += (qx & 1) ? 1 : -1; }
           }
           if (createsDeadPocket(cells)) {
             for (var q3 = 0; q3 < 4; q3++) {
@@ -327,7 +359,7 @@ function runPattern(S, ctx) {
             }
             continue;
           }
-          dr -= dd;
+          dr -= dd; dRw -= ddR; dCl -= ddC;
           filled += inS; used[sh]++;
           if (active) { value += vals[sh][act[sh]]; act[sh]++; } else wasted++;
           stack.push({ s: sh, cells: cells, active: active });
@@ -336,7 +368,7 @@ function runPattern(S, ctx) {
 
           stack.pop();
           if (active) { act[sh]--; value -= vals[sh][act[sh]]; } else wasted--;
-          used[sh]--; filled -= inS; dr += dd;
+          used[sh]--; filled -= inS; dr += dd; dRw += ddR; dCl += ddC;
           for (var q2 = 0; q2 < 4; q2++) {
             var c2 = cells[q2], y2 = (c2 / W) | 0;
             occ[c2] = 0; rh1[y2] ^= ZC1[c2]; rh2[y2] ^= ZC2[c2];

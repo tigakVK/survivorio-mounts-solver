@@ -179,9 +179,7 @@ button:disabled { cursor: not-allowed; }
 .inv-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .inv-head h2 { margin: 0; font-size: 17px; font-weight: 650; }
 .inv-total { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
-.mode { border: 0; padding: 0; margin: 10px 0 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.mode legend { float: left; font-size: 13px; color: var(--muted); margin-right: 4px; padding: 0; }
-.inv-body { container: inv / inline-size; }
+.inv-body { container: inv / inline-size; margin-top: 18px; padding-right: 10px; }
 .inv-grid {
   --cols: 7;
   display: grid; gap: 6px;
@@ -190,33 +188,42 @@ button:disabled { cursor: not-allowed; }
 }
 .tier-h { display: flex; align-items: center; justify-content: center; grid-column: 1; grid-row: calc(var(--t) + 1); }
 .tier-h .name { display: none; }
-.tile { grid-row: calc(var(--t) + 1); grid-column: calc(var(--s) + 2); }
+.cell { grid-row: calc(var(--t) + 1); grid-column: calc(var(--s) + 2); }
 @container inv (min-width: 480px) {
   .inv-grid { grid-template-columns: repeat(7, minmax(0, 84px)); justify-content: start; }
   .tier-h { grid-row: 1; grid-column: calc(var(--t) + 1); gap: 6px; justify-content: flex-start; font-size: 12px; color: var(--muted); min-width: 0; }
   .tier-h .name { display: inline; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tile { grid-row: calc(var(--s) + 2); grid-column: calc(var(--t) + 1); }
+  .cell { grid-row: calc(var(--s) + 2); grid-column: calc(var(--t) + 1); }
 }
+.cell { position: relative; min-width: 0; }
 .tile {
-  position: relative; aspect-ratio: 1; min-width: 0; min-height: 44px; padding: 3px;
+  position: relative; width: 100%; aspect-ratio: 1; min-width: 0; min-height: 44px; padding: 3px;
   background: var(--board); border: 2px solid var(--edge); border-radius: 10px;
   display: grid; place-items: center;
   -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none;
   transition: border-color 100ms, background 100ms, transform 80ms;
 }
 .tile canvas { width: 100%; height: 100%; display: block; pointer-events: none; }
-.tile[data-n="0"] canvas { opacity: .4; }
-.tile[data-n="0"] { border-color: #3c4579; }
+.cell[data-n="0"] .tile canvas { opacity: .4; }
+.cell[data-n="0"] .tile { border-color: #3c4579; }
 .tile:hover { border-color: var(--accent-hover); background: #131728; }
-.inv-card.remove-mode .tile:hover { border-color: var(--warn); background: rgba(255, 138, 122, .08); }
 .tile:active { transform: scale(.95); }
-.tile .n {
-  position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px; padding: 0 6px;
-  border-radius: 11px; background: var(--accent); color: var(--accent-ink);
-  font-size: 12px; font-weight: 800; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums;
-  border: 2px solid var(--panel);
+/* Count pill on the tile's corner: the minus sits right beside the number. */
+.badge {
+  position: absolute; top: -10px; right: -10px; z-index: 1; display: flex; height: 28px;
+  border: 2px solid var(--panel); border-radius: 14px; overflow: hidden;
+  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
 }
-.tile[data-n="0"] .n { display: none; }
+.cell[data-n="0"] .badge { display: none; }
+.badge .n { min-width: 24px; padding: 0 6px; background: var(--accent); color: var(--accent-ink); line-height: 24px; text-align: center; }
+.minus {
+  width: 26px; height: 24px; padding: 0; border: 0; border-right: 1px solid var(--panel);
+  background: var(--panel-2); color: var(--text); font: inherit; font-size: 15px; line-height: 24px;
+}
+.minus:hover { background: var(--warn); color: var(--accent-ink); }
+.minus:active { background: #ffb3a8; color: var(--accent-ink); }
+.minus:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+@media (pointer: coarse) { .minus { width: 28px; } }
 .inv-tip { font-size: 12.5px; color: var(--muted); margin: 12px 0 0; }
 .inv-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .inv-actions .danger { margin-left: auto; }
@@ -308,11 +315,6 @@ footer .disclaimer { display: block; margin-top: 2px; }
       <h2 id="inv-h" data-i18n="inv.title">Your pieces</h2>
       <span class="inv-total" id="inv-total"></span>
     </div>
-    <fieldset class="mode">
-      <legend data-i18n="mode.legend">Clicking a piece</legend>
-      <label class="seg"><input type="radio" name="mode" value="add" checked><span data-i18n="mode.add">adds one</span></label>
-      <label class="seg"><input type="radio" name="mode" value="remove"><span data-i18n="mode.remove">removes one</span></label>
-    </fieldset>
     <div class="inv-body">
       <div class="inv-grid" id="inv-grid"></div>
     </div>
@@ -507,20 +509,27 @@ function runPattern(S, ctx) {
   // Square, bar, L and J always cover 2 dark + 2 light; a T covers 3 + 1. So when the
   // remaining pieces must exactly cover the remaining S cells, T pieces must make up
   // the imbalance: each T adds +-2.
-  var dr = 0;
-  for (var si = 0; si < scan.length; si++) dr += ((scan[si] % W + ((scan[si] / W) | 0)) & 1) ? 1 : -1;
+  // Stripe balances of the same cells (row parity and column parity). Under either
+  // stripe colouring, squares and bars cover a multiple of 4 more of one colour,
+  // L and J always 2 more, and a T 2 more in exactly one of the two colourings.
+  var dr = 0, dRw = 0, dCl = 0;
+  for (var si = 0; si < scan.length; si++) {
+    var sx = scan[si] % W, sy = (scan[si] / W) | 0;
+    dr += ((sx + sy) & 1) ? 1 : -1; dRw += (sy & 1) ? 1 : -1; dCl += (sx & 1) ? 1 : -1;
+  }
   var noOutside = k === H;
   var lastFree = -1;
   for (var ly = 0; ly < H; ly++) if (!S[ly]) lastFree = ly;
-  var histT = new Int32Array(8), histN = new Int32Array(8);
-  var T_SHAPE = 4;
+  var histT = new Int32Array(8), histN = new Int32Array(8), histLJ = new Int32Array(8), histO = new Int32Array(8);
+  var T_SHAPE = 4, L_SHAPE = 2, J_SHAPE = 3;
 
   function fillHists() {
-    for (var v = 0; v < 8; v++) { histT[v] = 0; histN[v] = 0; }
+    for (var v = 0; v < 8; v++) { histT[v] = 0; histN[v] = 0; histLJ[v] = 0; histO[v] = 0; }
     for (var s = 0; s < NS; s++) {
-      var h = s === T_SHAPE ? histT : histN, end = act[s] + n[s] - used[s];
+      var h = s === T_SHAPE ? histT : (s === L_SHAPE || s === J_SHAPE) ? histLJ : histO, end = act[s] + n[s] - used[s];
       for (var p = act[s]; p < end; p++) h[vals[s][p]]++;
     }
+    for (var v2 = 0; v2 < 8; v2++) histN[v2] = histLJ[v2] + histO[v2];
   }
   function topOf(h, m) {
     var sum = 0;
@@ -538,16 +547,33 @@ function runPattern(S, ctx) {
     for (var v2 = 7; v2 >= 1 && cnt > 0; v2--) { var take = histN[v2] < cnt ? histN[v2] : cnt; sum += take * v2; cnt -= take; }
     return sum;
   }
-  // Exact cover of the remaining R cells by q = R/4 pieces: best value over T counts
-  // allowed by the checkerboard balance, or -1 when no count works.
+  // Exact cover of the remaining R cells by q = R/4 pieces: best value over the piece
+  // mixes the colourings allow, or -1 when none works.
+  //  - checkerboard: each T adds +-2 and nothing else unbalances it, so the T count t
+  //    has t >= |dr|/2 and the parity of dr/2;
+  //  - stripes (mod 4): 2(LJ + T_horizontal) = dRw and 2(LJ + T_vertical) = dCl, so t
+  //    has the parity of (dRw + dCl)/2, and with no T the L+J count has that of dRw/2.
   function exactBound(R) {
-    if (R & 3 || dr & 1) return -1;
+    if (R & 3 || dr & 1 || dRw & 1 || dCl & 1) return -1;
+    var tPar = (dr >> 1) & 1;
+    if (tPar !== (((dRw + dCl) >> 1) & 1)) return -1;
     fillHists();
     var q = R >> 2, nT = countOf(histT), nN = countOf(histN);
     var lo = Math.max(0, q - nN, Math.abs(dr) >> 1), hi = Math.min(nT, q), best = -1;
     for (var t = lo; t <= hi; t++) {
-      if (((t - (dr >> 1)) & 1) !== 0) continue;
-      var a = topOf(histT, t), b = topOf(histN, q - t);
+      if ((t & 1) !== tPar) continue;
+      var a = topOf(histT, t), b;
+      if (t > 0) b = topOf(histN, q - t);
+      else {
+        // No T: the L+J count is fixed mod 2.
+        b = -1;
+        var nLJ = countOf(histLJ), nO = countOf(histO);
+        for (var lj = (dRw >> 1) & 1; lj <= nLJ && lj <= q; lj += 2) {
+          if (q - lj > nO) continue;
+          var v = topOf(histLJ, lj) + topOf(histO, q - lj);
+          if (v > b) b = v;
+        }
+      }
       if (a >= 0 && b >= 0 && a + b > best) best = a + b;
     }
     return best;
@@ -627,7 +653,15 @@ function runPattern(S, ctx) {
     var eb = exact ? exactBound(R) : 0;
     if (eb < 0) return;
     if (mode === 'value' && best.found) {
-      var ub = value + (exact ? eb : topMarginal(R >> 2));
+      // Every piece placed from here covers at least one empty S cell. So either the
+      // remaining actives tile the rest of S exactly (the checkerboard rule applies to
+      // them), or some filler takes an S cell and at most floor((R-1)/4) actives fit.
+      var ub;
+      if (exact) ub = value + eb;
+      else {
+        var e2 = exactBound(R), m2 = topMarginal((R - 1) >> 2);
+        ub = value + (e2 > m2 ? e2 : m2);
+      }
       // Equal value only matters for more rows; fewer filler pieces is cosmetic and
       // not worth proving.
       if (ub < best.value || (ub === best.value && k <= best.k)) return;
@@ -666,11 +700,11 @@ function runPattern(S, ctx) {
           }
           if (!ok || active !== (pass === 0)) continue;
 
-          var cells = cellsTmp.slice(), dd = 0;
+          var cells = cellsTmp.slice(), dd = 0, ddR = 0, ddC = 0;
           for (var q = 0; q < 4; q++) {
             var cq = cells[q], qy = (cq / W) | 0, qx = cq % W;
             occ[cq] = 1; rh1[qy] ^= ZC1[cq]; rh2[qy] ^= ZC2[cq];
-            if (S[qy]) dd += ((qx + qy) & 1) ? 1 : -1;
+            if (S[qy]) { dd += ((qx + qy) & 1) ? 1 : -1; ddR += (qy & 1) ? 1 : -1; ddC += (qx & 1) ? 1 : -1; }
           }
           if (createsDeadPocket(cells)) {
             for (var q3 = 0; q3 < 4; q3++) {
@@ -679,7 +713,7 @@ function runPattern(S, ctx) {
             }
             continue;
           }
-          dr -= dd;
+          dr -= dd; dRw -= ddR; dCl -= ddC;
           filled += inS; used[sh]++;
           if (active) { value += vals[sh][act[sh]]; act[sh]++; } else wasted++;
           stack.push({ s: sh, cells: cells, active: active });
@@ -688,7 +722,7 @@ function runPattern(S, ctx) {
 
           stack.pop();
           if (active) { act[sh]--; value -= vals[sh][act[sh]]; } else wasted--;
-          used[sh]--; filled -= inS; dr += dd;
+          used[sh]--; filled -= inS; dr += dd; dRw += ddR; dCl += ddC;
           for (var q2 = 0; q2 < 4; q2++) {
             var c2 = cells[q2], y2 = (c2 / W) | 0;
             occ[c2] = 0; rh1[y2] ^= ZC1[c2]; rh2[y2] ^= ZC2[c2];
@@ -930,9 +964,9 @@ const I18N = {
     'hint.many': 'One more row needs at least {m} more pieces.',
     'or': 'or',
     'inv.title': 'Your pieces',
-    'mode.legend': 'Clicking a piece', 'mode.add': 'adds one', 'mode.remove': 'removes one',
-    'inv.tip': 'Right-click (or long-press on Android) removes one. Keyboard: arrow keys move, + and − change the count, digits type it.',
+    'inv.tip': 'Tap a piece to add one and − to remove one. Right-click also removes one. Keyboard: arrow keys move, + and − change the count, digits type it.',
     'tile.aria': '{shape} ({tier}), {n} owned',
+    'minus.aria': 'Remove one {shape} ({tier})',
     'btn.undo': 'Undo', 'btn.share': 'Copy link', 'btn.image': 'Save image', 'btn.clear': 'Clear all',
     'toast.cleared': 'Cleared {n} pieces.',
     'toast.copied': 'Link copied. It includes your mount and pieces.',
@@ -976,8 +1010,7 @@ const zeroCounts = () => SHAPES.map(() => TIERS.map(() => 0));
 const state = {
   counts: zeroCounts(),
   mount: 'scooter', customW: 7, customH: 8,
-  priority: load(KEY_PRIO) === 'value' ? 'value' : 'rows',
-  mode: 'add'
+  priority: load(KEY_PRIO) === 'value' ? 'value' : 'rows'
 };
 const undoStack = [];
 const dims = () => {
@@ -1172,16 +1205,25 @@ function buildGrid() {
   });
   SHAPES.forEach((shape, si) => {
     TIERS.forEach((tier, ti) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.style.setProperty('--s', si); cell.style.setProperty('--t', ti);
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'tile';
-      b.style.setProperty('--s', si); b.style.setProperty('--t', ti);
       b.dataset.s = si; b.dataset.t = ti;
       b.tabIndex = si === 0 && ti === 0 ? 0 : -1;
       const cv = document.createElement('canvas');
       cv.setAttribute('aria-hidden', 'true');
+      b.appendChild(cv);
+      const badge = document.createElement('span'); badge.className = 'badge';
+      const minus = document.createElement('button');
+      minus.type = 'button'; minus.className = 'minus'; minus.textContent = '−';
+      minus.dataset.s = si; minus.dataset.t = ti;
+      minus.tabIndex = -1; // keyboard users press − on the tile itself
       const n = document.createElement('span'); n.className = 'n'; n.setAttribute('aria-hidden', 'true');
-      b.append(cv, n);
-      invGrid.appendChild(b);
+      badge.append(minus, n);
+      cell.append(b, badge);
+      invGrid.appendChild(cell);
       tiles[si][ti] = b;
     });
   });
@@ -1192,10 +1234,11 @@ function refreshTiles() {
   updateTotals();
 }
 function updateTile(si, ti) {
-  const b = tiles[si][ti], n = state.counts[si][ti];
-  b.dataset.n = n;
-  b.querySelector('.n').textContent = n;
+  const b = tiles[si][ti], n = state.counts[si][ti], cell = b.parentNode;
+  cell.dataset.n = n;
+  cell.querySelector('.n').textContent = n;
   b.setAttribute('aria-label', t('tile.aria', { shape: shapeName(si), tier: tierName(ti), n }));
+  cell.querySelector('.minus').setAttribute('aria-label', t('minus.aria', { shape: shapeName(si), tier: tierName(ti) }));
 }
 function updateTotals() {
   const n = totalPieces();
@@ -1277,15 +1320,23 @@ function focusTile(si, ti) {
   tiles[si][ti].focus();
 }
 function onGridClick(e) {
+  const m = e.target.closest('.minus');
+  if (m) {
+    const si = +m.dataset.s, ti = +m.dataset.t;
+    change(si, ti, -1);
+    // The pill hides at zero; keep focus on the piece instead of losing it.
+    if (state.counts[si][ti] === 0 && document.activeElement === m) focusTile(si, ti);
+    return;
+  }
   const b = e.target.closest('.tile');
   if (!b) return;
   const si = +b.dataset.s, ti = +b.dataset.t;
   tiles.forEach((row) => row.forEach((x) => { x.tabIndex = -1; }));
   b.tabIndex = 0;
-  change(si, ti, state.mode === 'remove' || e.shiftKey ? -1 : 1);
+  change(si, ti, e.shiftKey ? -1 : 1);
 }
 function onGridContext(e) {
-  const b = e.target.closest('.tile');
+  const b = e.target.closest('.cell')?.querySelector('.tile');
   if (!b) return;
   e.preventDefault();
   change(+b.dataset.s, +b.dataset.t, -1);
@@ -1670,7 +1721,6 @@ function init() {
   document.querySelector('input[name="prio"][value="' + state.priority + '"]').checked = true;
 
   document.querySelectorAll('input[name="prio"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { state.priority = r.value; persist(); scheduleSolve(0); } }));
-  document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { state.mode = r.value; invCard.classList.toggle('remove-mode', r.value === 'remove'); } }));
   $('cw').addEventListener('input', onCustomInput); $('ch').addEventListener('input', onCustomInput);
   $('cw').addEventListener('change', onCustomCommit); $('ch').addEventListener('change', onCustomCommit);
   invGrid.addEventListener('click', onGridClick);
